@@ -10,7 +10,7 @@ import { formatDate } from '../../utils/dateHelpers';
 import { useOrders } from '../../hooks/useOrders';
 
 const SalesSection: React.FC = () => {
-  const { orders, loading, error, createOrder, completeOrder } = useOrders();
+  const { orders, loading, error, createOrder, updateOrderStatus } = useOrders();
   const [showForm, setShowForm] = useState(false);
   const [orderItems, setOrderItems] = useState<Array<{ item: string; quantity: number; price: number; total: number }>>([]);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -86,15 +86,15 @@ const SalesSection: React.FC = () => {
   };
 
   const markOrderAsCompleted = async (orderId: number) => {
-    await completeOrder(orderId.toString());
+    await updateOrderStatus(orderId.toString(), 'COMPLETED');
   };
 
-  const toggleOrderExpansion = (orderId: string) => {
+  const toggleOrderExpansion = (orderId: number) => {
     const newExpanded = new Set(expandedOrders);
-    if (newExpanded.has(orderId)) {
-      newExpanded.delete(orderId);
+    if (newExpanded.has(orderId.toString())) {
+      newExpanded.delete(orderId.toString());
     } else {
-      newExpanded.add(orderId);
+      newExpanded.add(orderId.toString());
     }
     setExpandedOrders(newExpanded);
   };
@@ -303,7 +303,7 @@ const SalesSection: React.FC = () => {
                   {/* Order Header */}
                   <div 
                     className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50"
-                    onClick={() => toggleOrderExpansion(order.id.toString())}
+                    onClick={() => toggleOrderExpansion(order.id)}
                   >
                     <div className="flex items-center space-x-4">
                       <div>
