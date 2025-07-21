@@ -1,38 +1,35 @@
 export interface Sale {
   id: string;
-  date: string;
+  date: Date;
   item: string;
   quantity: number;
-  pricePerItem: number;
   total: number;
-  paymentMethod: 'cash' | 'card' | 'online';
+  paymentMethod: string;
   createdAt: Date;
-}
-
-export interface Order {
-  id: number; // bigint in database
-  date: string;
-  customer_description: string;
-  items: {
-    item: string;
-    quantity: number;
-    pricePerItem: number;
-    total: number;
-  }[];
-  order_total: number;
-  status: 'PENDING' | 'COMPLETED';
-  created_at: Date;
-  updated_at?: Date;
 }
 
 export interface Expense {
-  id: string;
-  date: string;
-  category: string;
+  id: number;
+  category: 'seri_ternak' | 'balaji' | 'wraps' | 'marketing' | 'other' | 'weekly_expense';
   description: string;
-  amount: number;
-  receiptUrl?: string;
-  createdAt: Date;
+  amount: number; // in cents
+  created_at: string;
+}
+
+export interface Order {
+  id: number;
+  date: string;
+  customer_description: string;
+  items: Array<{
+    item: string;
+    quantity: number;
+    price: number;
+    total: number;
+  }>;
+  order_total: number; // in cents
+  status: 'PENDING' | 'COMPLETED';
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MenuItem {

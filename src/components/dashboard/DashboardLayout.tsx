@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { ThemeToggle } from '../ui/theme-toggle';
 import { 
   BarChart3, 
   DollarSign, 
   Receipt, 
-  TrendingUp, 
   Settings,
   Menu,
-  X
+  X,
+  PieChart
 } from 'lucide-react';
 import MetricsCards from './MetricsCards';
 import SalesSection from './SalesSection';
 import ExpensesSection from './ExpensesSection';
-import AnalyticsSection from './AnalyticsSection';
+import AnalyticsPage from './AnalyticsPage';
 
 interface DashboardLayoutProps {
   children?: React.ReactNode;
@@ -76,7 +75,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = () => {
       {/* Main Content */}
       <div className="flex-1 p-4 sm:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-          <TabsList className="grid w-full grid-cols-3 h-auto sm:h-10">
+          <TabsList className="grid w-full grid-cols-4 h-auto sm:h-10">
             <TabsTrigger 
               value="overview" 
               className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 py-3 sm:py-2 text-xs sm:text-sm"
@@ -92,6 +91,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = () => {
               <span>Sales</span>
             </TabsTrigger>
             <TabsTrigger 
+              value="analytics" 
+              className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 py-3 sm:py-2 text-xs sm:text-sm"
+            >
+              <PieChart className="h-4 w-4" />
+              <span>Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger 
               value="expenses" 
               className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 py-3 sm:py-2 text-xs sm:text-sm"
             >
@@ -102,11 +108,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = () => {
 
           <TabsContent value="overview" className="space-y-4 sm:space-y-6">
             <MetricsCards />
-            <AnalyticsSection />
           </TabsContent>
 
           <TabsContent value="sales">
             <SalesSection />
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <AnalyticsPage />
           </TabsContent>
 
           <TabsContent value="expenses">

@@ -23,10 +23,10 @@ export const useOrders = () => {
   }, []);
 
   // Create new order
-  const createOrder = useCallback(async (orderData: Omit<Order, 'id'>) => {
+  const createOrder = useCallback(async (orderData: Omit<Order, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setError(null);
-      const newOrder = await database.insertOrder(orderData);
+      const newOrder = await database.createOrder(orderData);
       if (newOrder) {
         setOrders(prev => [newOrder, ...prev]);
         return newOrder;
@@ -95,6 +95,31 @@ export const useOrders = () => {
     }
   }, []);
 
+  // Update order details
+  const updateOrder = useCallback(async (orderId: string, updates: Partial<Order>) => {
+    try {
+      setError(null);
+      const success = await database.updateOrder(orderId, updates);
+      if (success) {
+        setOrders(prev => 
+          prev.map(order => 
+            order.id.toString() === orderId 
+              ? { ...order, ...updates }
+              : order
+          )
+        );
+        return true;
+      } else {
+        setError('Failed to update order');
+        return false;
+      }
+    } catch (err) {
+      setError('Failed to update order');
+      console.error('Error updating order:', err);
+      return false;
+    }
+  }, []);
+
   // Get orders by date range
   const getOrdersByDateRange = useCallback(async (startDate: string, endDate: string) => {
     try {
@@ -148,6 +173,7 @@ export const useOrders = () => {
     completeOrder,
     resetOrderToPending,
     deleteOrder,
+    updateOrder,
     loadOrders,
     getOrdersByDateRange,
     getOrdersByCustomer,

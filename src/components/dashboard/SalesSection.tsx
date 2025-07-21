@@ -3,23 +3,86 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { menuItems } from '../../data/menuItems';
 import { formatCurrency } from '../../utils/calculations';
-import { formatDate } from '../../utils/dateHelpers';
 import { useOrders } from '../../hooks/useOrders';
+import { startOfWeek, format, addWeeks, subWeeks } from 'date-fns';
 
 const SalesSection: React.FC = () => {
-  const { orders, loading, error, createOrder, updateOrderStatus } = useOrders();
+  const { orders, loading, error, createOrder, updateOrderStatus, updateOrder } = useOrders();
   const [showForm, setShowForm] = useState(false);
   const [orderItems, setOrderItems] = useState<Array<{ item: string; quantity: number; price: number; total: number }>>([]);
-  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [editingOrder, setEditingOrder] = useState<number | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState(new Date());
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     customerDescription: '',
     selectedItem: '',
     quantity: 1,
   });
+
+  // Weekly navigation functions
+  const goToPreviousWeek = () => {
+    setSelectedWeek(prev => subWeeks(prev, 1));
+  };
+
+  const goToNextWeek = () => {
+    setSelectedWeek(prev => addWeeks(prev, 1));
+  };
+
+  const goToCurrentWeek = () => {
+    setSelectedWeek(new Date());
+  };
+
+  // Get week start and end dates
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday
+
+  // Get Friday and Saturday dates for the selected week
+  const getFridayDate = () => {
+    const friday = new Date(weekStart);
+    friday.setDate(weekStart.getDate() + 4); // Friday is 4 days after Monday
+    return friday;
+  };
+
+  const getSaturdayDate = () => {
+    const saturday = new Date(weekStart);
+    saturday.setDate(weekStart.getDate() + 5); // Saturday is 5 days after Monday
+    return saturday;
+  };
+
+  // Get sales for Friday and Saturday of the selected week
+  const getWeeklySales = () => {
+    const fridayDate = getFridayDate();
+    const saturdayDate = getSaturdayDate();
+    
+    const fridaySales = orders.filter(order => {
+      const orderDate = new Date(order.date);
+      return orderDate.toDateString() === fridayDate.toDateString();
+    });
+
+    const saturdaySales = orders.filter(order => {
+      const orderDate = new Date(order.date);
+      return orderDate.toDateString() === saturdayDate.toDateString();
+    });
+
+    return {
+      friday: {
+        date: fridayDate,
+        sales: fridaySales,
+        total: fridaySales.reduce((sum, order) => sum + order.order_total, 0),
+        orderCount: fridaySales.length,
+        itemCount: fridaySales.reduce((sum, order) => sum + order.items.length, 0)
+      },
+      saturday: {
+        date: saturdayDate,
+        sales: saturdaySales,
+        total: saturdaySales.reduce((sum, order) => sum + order.order_total, 0),
+        orderCount: saturdaySales.length,
+        itemCount: saturdaySales.reduce((sum, order) => sum + order.items.length, 0)
+      }
+    };
+  };
 
   const addItemToOrder = () => {
     if (!formData.selectedItem) return;
@@ -55,12 +118,11 @@ const SalesSection: React.FC = () => {
       items: orderItems.map(item => ({
         item: item.item,
         quantity: item.quantity,
-        pricePerItem: item.price,
+        price: item.price,
         total: item.total,
       })),
       order_total: getOrderTotal(),
       status: 'PENDING' as const,
-      created_at: new Date(),
     };
 
     console.log('Creating order with data:', newOrderData);
@@ -85,18 +147,91 @@ const SalesSection: React.FC = () => {
     }
   };
 
-  const markOrderAsCompleted = async (orderId: number) => {
-    await updateOrderStatus(orderId.toString(), 'COMPLETED');
+  const handleUpdateOrder = async () => {
+    if (orderItems.length === 0 || !editingOrder) return;
+
+    const updatedOrderData = {
+      items: orderItems.map(item => ({
+        item: item.item,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+      })),
+      order_total: getOrderTotal(),
+    };
+
+    try {
+      // Update the order in the database
+      const success = await updateOrder(editingOrder.toString(), updatedOrderData);
+      if (success) {
+        // Reset form
+        setOrderItems([]);
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          customerDescription: '',
+          selectedItem: '',
+          quantity: 1,
+        });
+        setShowForm(false);
+        setEditingOrder(null);
+      }
+    } catch (error) {
+      console.error('Error updating order:', error);
+    }
   };
 
-  const toggleOrderExpansion = (orderId: number) => {
-    const newExpanded = new Set(expandedOrders);
-    if (newExpanded.has(orderId.toString())) {
-      newExpanded.delete(orderId.toString());
-    } else {
-      newExpanded.add(orderId.toString());
+  const handleEndOfDay = async () => {
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
+    
+    // Check if it's Friday (5) or Saturday (6)
+    if (currentDay !== 5 && currentDay !== 6) {
+      alert('Shop is only open on Friday and Saturday!');
+      return;
     }
-    setExpandedOrders(newExpanded);
+
+    // Get today's date in YYYY-MM-DD format
+    const todayString = today.toISOString().split('T')[0];
+    
+    // Find all pending orders for today
+    const todaysPendingOrders = orders.filter(order => 
+      order.status === 'PENDING' && 
+      order.date === todayString
+    );
+
+    if (todaysPendingOrders.length === 0) {
+      alert('No pending orders for today!');
+      return;
+    }
+
+    // Confirm with user
+    const confirmMessage = `Complete all ${todaysPendingOrders.length} pending orders for ${todayString}?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    // Complete all pending orders for today
+    try {
+      for (const order of todaysPendingOrders) {
+        await updateOrderStatus(order.id.toString(), 'COMPLETED');
+      }
+      alert(`Successfully completed ${todaysPendingOrders.length} orders for ${todayString}!`);
+    } catch (error) {
+      console.error('Error completing orders:', error);
+      alert('Error completing orders. Please try again.');
+    }
+  };
+
+  const getCurrentDayName = () => {
+    const today = new Date();
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[today.getDay()];
+  };
+
+  const isShopOpen = () => {
+    const today = new Date();
+    const currentDay = today.getDay();
+    return currentDay === 5 || currentDay === 6; // Friday or Saturday
   };
 
   if (loading) {
@@ -144,11 +279,34 @@ const SalesSection: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold">Sales Management</h2>
           <p className="text-muted-foreground">Track and manage your sales</p>
+          <div className="flex items-center space-x-2 mt-1">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              isShopOpen() 
+                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+            }`}>
+              {isShopOpen() ? '🟢 Shop Open' : '🔴 Shop Closed'}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Today: {getCurrentDayName()}
+            </span>
+          </div>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Sale
-        </Button>
+        <div className="flex space-x-2">
+          {isShopOpen() && (
+            <Button 
+              variant="outline" 
+              onClick={handleEndOfDay}
+              className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-900/30"
+            >
+              End of Day
+            </Button>
+          )}
+          <Button onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Sale
+          </Button>
+        </div>
       </div>
 
       {/* Add Sale Form */}
@@ -191,15 +349,35 @@ const SalesSection: React.FC = () => {
               </div>
               <div>
                 <label className="text-sm font-medium">Quantity</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    quantity: parseInt(e.target.value) || 1 
-                  }))}
-                />
+                <div className="flex items-center space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormData(prev => ({ 
+                      ...prev, 
+                      quantity: Math.max(1, prev.quantity - 1) 
+                    }))}
+                    className="w-10 h-10"
+                  >
+                    -
+                  </Button>
+                  <div className="flex items-center justify-center w-16 h-10 border rounded-md bg-background">
+                    <span className="text-sm font-medium">{formData.quantity}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormData(prev => ({ 
+                      ...prev, 
+                      quantity: prev.quantity + 1 
+                    }))}
+                    className="w-10 h-10"
+                  >
+                    +
+                  </Button>
+                </div>
               </div>
             </div>
             
@@ -243,12 +421,13 @@ const SalesSection: React.FC = () => {
             )}
 
             <div className="flex space-x-2">
-              <Button onClick={handleAddSale} disabled={orderItems.length === 0}>
-                Complete Sale
+              <Button onClick={editingOrder ? handleUpdateOrder : handleAddSale} disabled={orderItems.length === 0}>
+                {editingOrder ? 'Update Order' : 'Complete Sale'}
               </Button>
               <Button variant="outline" onClick={() => {
                 setShowForm(false);
                 setOrderItems([]);
+                setEditingOrder(null);
                 setFormData({
                   date: new Date().toISOString().split('T')[0],
                   customerDescription: '',
@@ -264,112 +443,136 @@ const SalesSection: React.FC = () => {
       )}
 
       {/* Orders List */}
-      <Card>
-        <CardHeader>
+      <Card className="border-0 bg-transparent shadow-none">
+        <CardHeader className="border-0">
           <div className="flex items-center justify-between">
             <CardTitle>Sales History</CardTitle>
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm">
-                {/* Search icon removed as per new_code */}
-                Search
+            
+            {/* Week Selector */}
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousWeek}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="sm">
-                {/* Filter icon removed as per new_code */}
-                Filter
+              <div className="text-sm font-medium min-w-[100px] text-center">
+                {format(weekStart, 'MMM dd')}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextWeek}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronRight className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="sm">
-                {/* Download icon removed as per new_code */}
-                Export
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToCurrentWeek}
+                className="px-2"
+              >
+                Today
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {orders.length === 0 ? (
+        <CardContent className="border-0">
+          {loading ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No sales recorded yet</p>
-              <Button 
-                variant="outline" 
-                className="mt-2"
-                onClick={() => setShowForm(true)}
-              >
-                Add your first sale
-              </Button>
+              <p className="text-muted-foreground">Loading sales...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-500">Error: {error}</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {orders.map((order) => (
-                <div key={order.id} className="border rounded-lg">
-                  {/* Order Header */}
-                  <div 
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50"
-                    onClick={() => toggleOrderExpansion(order.id)}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <p className="font-medium">Order #{order.id}</p>
-                        <p className="text-sm text-muted-foreground">{formatDate(order.date)}</p>
-                        {order.customer_description && (
-                          <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
-                            {order.customer_description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {order.items.length} item{order.items.length !== 1 ? 's' : ''}
-                      </div>
+              {(() => {
+                const weeklySales = getWeeklySales();
+                const hasSales = weeklySales.friday.sales.length > 0 || weeklySales.saturday.sales.length > 0;
+                
+                if (!hasSales) {
+                  return (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        No sales recorded for Friday and Saturday of this week
+                      </p>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="font-bold text-lg">{formatCurrency(order.order_total)}</p>
-                        <p className="text-sm text-muted-foreground">Total</p>
-                      </div>
-                      {order.status === 'PENDING' ? (
-                        <Button 
-                          size="sm" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            markOrderAsCompleted(order.id);
-                          }}
-                        >
-                          Finish
-                        </Button>
-                      ) : (
-                        <div className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full text-xs font-medium">
-                          Completed
-                        </div>
-                      )}
-                      {expandedOrders.has(order.id.toString()) ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </div>
-                  </div>
+                  );
+                }
 
-                  {/* Order Details */}
-                  {expandedOrders.has(order.id.toString()) && (
-                    <div className="border-t bg-muted/30">
-                      <div className="p-4">
-                        <h4 className="font-medium mb-3">Order Items:</h4>
-                        <div className="space-y-2">
-                          {order.items.map((item, index) => (
-                            <div key={index} className="flex justify-between items-center py-2">
-                              <div>
-                                <span className="font-medium">{item.item}</span>
-                                <span className="text-sm text-muted-foreground ml-2">
-                                  x{item.quantity} @ {formatCurrency(item.pricePerItem)}
-                                </span>
-                              </div>
-                              <span className="font-medium">{formatCurrency(item.total)}</span>
-                            </div>
-                          ))}
+                return (
+                  <>
+                    {/* Friday Sales */}
+                    {weeklySales.friday.sales.length > 0 && (
+                      <div className="border border-border rounded-lg p-4 bg-card">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-semibold">
+                              {format(weeklySales.friday.date, 'EEEE - yyyy-MM-dd')}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {format(weeklySales.friday.date, 'MMM dd, yyyy')}
+                            </p>
+                            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                              {weeklySales.friday.orderCount} orders • {weeklySales.friday.itemCount} items
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold">
+                              {formatCurrency(weeklySales.friday.total)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Total Sales</p>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="mt-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
+                            >
+                              Day Completed
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+
+                    {/* Saturday Sales */}
+                    {weeklySales.saturday.sales.length > 0 && (
+                      <div className="border border-border rounded-lg p-4 bg-card">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-semibold">
+                              {format(weeklySales.saturday.date, 'EEEE - yyyy-MM-dd')}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {format(weeklySales.saturday.date, 'MMM dd, yyyy')}
+                            </p>
+                            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                              {weeklySales.saturday.orderCount} orders • {weeklySales.saturday.itemCount} items
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold">
+                              {formatCurrency(weeklySales.saturday.total)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Total Sales</p>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="mt-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
+                            >
+                              Day Completed
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </CardContent>

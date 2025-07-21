@@ -1,24 +1,21 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Order } from '../types';
+import { Order, Expense } from '../types';
 
 class Database {
   private supabase: SupabaseClient;
 
   constructor() {
-    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-    
-    console.log('Database: Initializing with URL:', supabaseUrl ? 'Set' : 'Not set');
-    console.log('Database: Initializing with Key:', supabaseKey ? 'Set' : 'Not set');
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
+    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
     
     this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
-  // Create a new order
-  async insertOrder(orderData: Omit<Order, 'id'>): Promise<Order | null> {
+  // ===== ORDERS METHODS =====
+
+  // Create new order
+  async createOrder(orderData: Omit<Order, 'id' | 'created_at' | 'updated_at'>): Promise<Order | null> {
     try {
-      console.log('Database: Attempting to insert order:', orderData);
-      
       const { data, error } = await this.supabase
         .from('shawarma_sales')
         .insert([orderData])
@@ -26,14 +23,13 @@ class Database {
         .single();
 
       if (error) {
-        console.error('Database: Error inserting order:', error);
+        console.error('Error creating order:', error);
         return null;
       }
 
-      console.log('Database: Successfully inserted order:', data);
       return data;
     } catch (error) {
-      console.error('Database: Exception inserting order:', error);
+      console.error('Error creating order:', error);
       return null;
     }
   }
@@ -142,16 +138,6 @@ class Database {
     }
   }
 
-  // Complete an order
-  async completeOrder(orderId: string): Promise<boolean> {
-    return this.updateOrderStatus(orderId, 'COMPLETED');
-  }
-
-  // Reset order to pending
-  async resetOrderToPending(orderId: string): Promise<boolean> {
-    return this.updateOrderStatus(orderId, 'PENDING');
-  }
-
   // Update order details
   async updateOrder(orderId: string, updates: Partial<Order>): Promise<boolean> {
     try {
@@ -172,7 +158,7 @@ class Database {
     }
   }
 
-  // Delete an order
+  // Delete order
   async deleteOrder(orderId: string): Promise<boolean> {
     try {
       const { error } = await this.supabase
@@ -189,27 +175,6 @@ class Database {
     } catch (error) {
       console.error('Error deleting order:', error);
       return false;
-    }
-  }
-
-  // Get order by ID
-  async getOrderById(orderId: string): Promise<Order | null> {
-    try {
-      const { data, error } = await this.supabase
-        .from('shawarma_sales')
-        .select('*')
-        .eq('id', orderId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching order by ID:', error);
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error fetching order by ID:', error);
-      return null;
     }
   }
 
@@ -234,7 +199,7 @@ class Database {
     }
   }
 
-  // Get total sales amount
+  // Get total sales
   async getTotalSales(): Promise<number> {
     try {
       const { data, error } = await this.supabase
@@ -273,7 +238,176 @@ class Database {
       return 0;
     }
   }
+
+  // ===== EXPENSES METHODS =====
+
+  // Create new expense
+  async createExpense(expenseData: Omit<Expense, 'id' | 'created_at'>): Promise<Expense | null> {
+    try {
+      console.log('Creating expense with data:', expenseData);
+      
+      const { data, error } = await this.supabase
+        .from('shawarma_expenses')
+        .insert([expenseData])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating expense:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        return null;
+      }
+
+      console.log('Expense created successfully:', data);
+      return data;
+    } catch (error) {
+      console.error('Error creating expense:', error);
+      return null;
+    }
+  }
+
+  // Get all expenses
+  async getAllExpenses(): Promise<Expense[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('shawarma_expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching expenses:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+      return [];
+    }
+  }
+
+  // Get expenses by date range
+  async getExpensesByDateRange(startDate: string, endDate: string): Promise<Expense[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('shawarma_expenses')
+        .select('*')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching expenses by date range:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching expenses by date range:', error);
+      return [];
+    }
+  }
+
+  // Get expenses by category
+  async getExpensesByCategory(category: Expense['category']): Promise<Expense[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('shawarma_expenses')
+        .select('*')
+        .eq('category', category)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching expenses by category:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching expenses by category:', error);
+      return [];
+    }
+  }
+
+  // Update expense
+  async updateExpense(expenseId: string, updates: Partial<Expense>): Promise<boolean> {
+    try {
+      const { error } = await this.supabase
+        .from('shawarma_expenses')
+        .update(updates)
+        .eq('id', expenseId);
+
+      if (error) {
+        console.error('Error updating expense:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      return false;
+    }
+  }
+
+  // Delete expense
+  async deleteExpense(expenseId: string): Promise<boolean> {
+    try {
+      const { error } = await this.supabase
+        .from('shawarma_expenses')
+        .delete()
+        .eq('id', expenseId);
+
+      if (error) {
+        console.error('Error deleting expense:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      return false;
+    }
+  }
+
+  // Get total expenses
+  async getTotalExpenses(): Promise<number> {
+    try {
+      const { data, error } = await this.supabase
+        .from('shawarma_expenses')
+        .select('amount');
+
+      if (error) {
+        console.error('Error fetching total expenses:', error);
+        return 0;
+      }
+
+      return data?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+    } catch (error) {
+      console.error('Error fetching total expenses:', error);
+      return 0;
+    }
+  }
+
+  // Get total expenses by date range
+  async getTotalExpensesByDateRange(startDate: string, endDate: string): Promise<number> {
+    try {
+      const { data, error } = await this.supabase
+        .from('shawarma_expenses')
+        .select('amount')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
+
+      if (error) {
+        console.error('Error fetching total expenses by date range:', error);
+        return 0;
+      }
+
+      return data?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+    } catch (error) {
+      console.error('Error fetching total expenses by date range:', error);
+      return 0;
+    }
+  }
 }
 
-// Create and export a singleton instance
 export const database = new Database(); 

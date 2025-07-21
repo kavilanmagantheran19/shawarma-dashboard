@@ -1,4 +1,4 @@
-import { format, parseISO, isValid, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, parseISO, isValid, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 export const formatDate = (date: Date | string): string => {
   const dateObj = typeof date === 'string' ? parseISO(date) : date;

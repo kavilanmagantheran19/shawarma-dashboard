@@ -1,5 +1,5 @@
 import { Sale, Expense, DashboardMetrics, ChartData } from '../types';
-import { format, subDays, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
+import { subDays, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 
 export const calculateTotalSales = (sales: Sale[], dateRange?: { from: Date; to: Date }): number => {
   if (dateRange) {
@@ -17,7 +17,7 @@ export const calculateTotalExpenses = (expenses: Expense[], dateRange?: { from: 
   if (dateRange) {
     return expenses
       .filter(expense => {
-        const expenseDate = new Date(expense.date);
+        const expenseDate = new Date(expense.created_at);
         return isWithinInterval(expenseDate, { start: dateRange.from, end: dateRange.to });
       })
       .reduce((sum, expense) => sum + expense.amount, 0);
@@ -66,7 +66,6 @@ export const calculateAverageDailySales = (sales: Sale[], days: number = 7): num
 export const getSalesTrend = (sales: Sale[]): 'up' | 'down' | 'stable' => {
   const today = new Date();
   const yesterday = subDays(today, 1);
-  const twoDaysAgo = subDays(today, 2);
   
   const todaySales = calculateTotalSales(sales, { from: startOfDay(today), to: endOfDay(today) });
   const yesterdaySales = calculateTotalSales(sales, { from: startOfDay(yesterday), to: endOfDay(yesterday) });
